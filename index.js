@@ -2,9 +2,8 @@ require('dotenv').config()
 const axios = require('axios')
 const mysql = require('mysql')
 const moment = require('moment')
-const ms = require('ms')
+const cron = require('node-cron')
 
-const RefreshInterval = ms(process.env.REFRESH_INTERVAL)
 const RPC_URL = `http://${process.env.RPC_HOSTNAME}:${process.env.RPC_PORT}`
 
 const checkForRPC = () => {
@@ -25,7 +24,9 @@ const checkForRPC = () => {
     }
 
     axios(config)
-      .then(resolve(true))
+      .then(() => {
+        resolve(true)
+      })
       .catch((error) => {
         error.message && console.error(error.message)
         reject(new Error('RPC Server is not reachable!'))
@@ -170,8 +171,9 @@ const doLogger = () => {
 const startLogger = () => {
   return new Promise((resolve, reject) => {
     try {
-      console.log(`Executing every ${RefreshInterval}ms ...`)
-      return setInterval(doLogger, RefreshInterval) && resolve()
+      console.log(`Executing Cron Layout: ${process.env.REFRESH_INTERVAL}`)
+      cron.schedule(process.env.REFRESH_INTERVAL, doLogger)
+      return resolve()
     } catch (err) {
       reject(err)
     }
@@ -233,7 +235,6 @@ Promise.all([
     startLogger().then(() => {
       console.log('Logger has been started ...')
       newLine()
-      doLogger()
     })
   }).catch(error => {
     error.message && console.error(error.message)
