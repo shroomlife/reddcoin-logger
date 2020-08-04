@@ -1,0 +1,23 @@
+name: push-image
+
+on:
+  push:
+    branches:
+    - release
+
+jobs:
+
+  push-image:
+ 
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - uses: actions/checkout@master
+      with:
+        ref: master
+    - name: Build Docker Image
+      run: docker build . --tag shroomlife/reddcoin-logger:latest
+    - name: Login to Docker Hub
+      run: echo "${{ secrets.DOCKER_TOKEN }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+    - name: Push Docker Image
+      run: docker push shroomlife/reddcoin-logger:latest
