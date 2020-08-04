@@ -1,0 +1,17 @@
+version: '3.6'
+services: 
+
+  reddcoin-logger:
+    container_name: reddcoin-logger
+    image: shroomlife/reddcoin-logger:latest
+    build: .
+    env_file: .env
+
+  reddcoin-db:
+    container_name: reddcoin-db
+    image: mariadb:latest
+    env_file: .env
+    volumes:
+      - "/root/dbdata:/var/lib/mysql"
+    ports:
+      - "3306:3306"
