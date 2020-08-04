@@ -11,7 +11,7 @@ The logger is a little NodeJS app that is logging the wallet to a defioned datab
 
 ## Getting Started
 
-Example `docker-compose.yml` file:
+Example `docker-compose.yml` file with all needed services on one single machine:
 
 ```yaml
 version: '3.6'
@@ -32,22 +32,17 @@ services:
   reddcoin-logger:
     container_name: reddcoin-logger
     image: shroomlife/reddcoin-logger:latest
-    build: .
     env_file: .env
 
   reddcoin-db:
     container_name: reddcoin-db
     image: mariadb:latest
     env_file: .env
-    volumes:
-      - "/root/dbdata:/var/lib/mysql"
-    ports:
-      - "3306:3306"
 ```
 
 Example `.env` file:
 
-```
+```sh
 ## ReddCoin Logger Configuration
 RPC_HOSTNAME=reddcoin-server
 RPC_PORT=45443
