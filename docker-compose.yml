@@ -7,11 +7,11 @@ services:
     build: .
     env_file: .env
 
-  reddcoin-db:
-    container_name: reddcoin-db
+  db:
+    container_name: db
     image: mariadb:latest
     env_file: .env
-    volumes:
-      - "/root/dbdata:/var/lib/mysql"
+    # volumes:
+    #   - "/root/dbdata:/var/lib/mysql"
     ports:
       - "3306:3306"

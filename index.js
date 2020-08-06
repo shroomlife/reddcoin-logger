@@ -3,8 +3,11 @@ const axios = require('axios')
 const mysql = require('mysql')
 const moment = require('moment')
 const cron = require('node-cron')
+const os = require('os')
 
 const RPC_URL = `http://${process.env.RPC_HOSTNAME}:${process.env.RPC_PORT}`
+
+const LogCurrencies = String(process.env.CC_PRICES).split(',')
 
 const checkForRPC = () => {
   return new Promise((resolve, reject) => {
@@ -24,7 +27,7 @@ const checkForRPC = () => {
     }
 
     axios(config)
-      .then(() => {
+      .then(response => {
         resolve(true)
       })
       .catch((error) => {
@@ -73,7 +76,9 @@ const createTable = (TableName, Fields) => {
     const CreateTableQuery = `
     CREATE TABLE \`${TableName}\` (
       \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-      ${Fields.join(',')},
+      ${Fields.map(Field => {
+        return getCreateTableColumn(...Field)
+      }).join(',' + os.EOL)},
       \`created\` DATETIME NULL DEFAULT CURRENT_TIMESTAMP(),
       PRIMARY KEY (\`id\`)
     )
@@ -128,11 +133,15 @@ const getFromRPC = (command) => {
   })
 }
 
-const writeToDb = (TableName, Data) => {
+const writeToDb = (TableName, Data, Fields = '*') => {
   return new Promise((resolve, reject) => {
-    var SqlQuery = `INSERT INTO ${TableName} (${Object.keys(Data).join(',')}) VALUES (?)`
+    const AllowedKeys = Object.keys(Data).filter(Key => {
+      return Fields === '*' || Fields.includes(Key)
+    })
 
-    const Values = Object.keys(Data).map(Key => {
+    var SqlQuery = `INSERT INTO ${TableName} (${AllowedKeys.join(',')}) VALUES (?)`
+
+    const Values = AllowedKeys.map(Key => {
       if (Data[Key] === true) return 1
       if (Data[Key] === false) return 0
       return Data[Key]
@@ -149,17 +158,15 @@ const doLogger = () => {
   logWT('# Start Logging ...')
 
   Promise.all([
-    getFromRPC('getblockchaininfo'),
-    getFromRPC('getwalletinfo'),
-    getFromRPC('getstakinginfo')
-  ]).then(([getblockchaininfo, getwalletinfo, getstakinginfo]) => {
-    delete getstakinginfo['search-interval']
-
+    getFromRPC('getstakinginfo'),
+    getFromRPC('getinfo'),
+    getFromRPC('getwalletinfo')
+  ]).then(([getstakinginfo, getinfo, getwalletinfo]) => {
     logWT('Load from RPC Server successful.')
+    getinfo.txcount = getwalletinfo.txcount
     Promise.all([
-      writeToDb('getblockchaininfo', getblockchaininfo),
-      writeToDb('getwalletinfo', getwalletinfo),
-      writeToDb('getstakinginfo', getstakinginfo)
+      writeToDb('getstakinginfo', getstakinginfo, ['staking', 'averageweight', 'totalweight', 'netstakeweight', 'expectedtime']),
+      writeToDb('getinfo', getinfo, ['balance', 'txcount', 'blocks', 'moneysupply'])
     ]).then(() => {
       logWT('Write to DB successful.')
       logWT('# Done Logging.')
@@ -168,16 +175,46 @@ const doLogger = () => {
   })
 }
 
+const doPriceLogger = () => {
+  axios({
+    url: `https://min-api.cryptocompare.com/data/pricemultifull?fsyms=RDD&tsyms=${LogCurrencies.join(',')}`,
+    headers: {
+      Authorization: `Apikey ${process.env.CC_API_KEY}`
+    }
+  }).then(response => {
+    LogCurrencies.map(currency => {
+      writeToDb('prices', {
+        currency: currency,
+        price: response.data.RAW.RDD[currency].PRICE,
+        priceView: response.data.DISPLAY.RDD[currency].PRICE
+      })
+    })
+  })
+}
+
 const startLogger = () => {
   return new Promise((resolve, reject) => {
     try {
-      console.log(`Executing Cron Layout: ${process.env.REFRESH_INTERVAL}`)
-      cron.schedule(process.env.REFRESH_INTERVAL, doLogger)
-      return resolve()
+      console.log(`Executing Cron: ${process.env.REFRESH_INTERVAL}`)
+      cron.schedule(process.env.REFRESH_INTERVAL, () => {
+        doLogger()
+        doPriceLogger()
+      })
+
+      doLogger()
+      doPriceLogger()
+
+      resolve()
     } catch (err) {
       reject(err)
     }
   })
+}
+
+const getCreateTableColumn = (Name, Type, Null = true, Default = 'DEFAULT NULL') => {
+  const FinalNull = Null === true ? 'NULL' : 'NOT NULL'
+  const FinalDefault = Default === 'DEFAULT NULL' ? 'DEFAULT NULL' : `DEFAULT ${Default}`
+  return `\`${Name}\` ${Type} ${FinalNull} ${FinalDefault}`
 }
 
 Promise.all([
@@ -191,35 +228,26 @@ Promise.all([
 
   newLine()
   console.log('### SETUP DATABASE')
-  new Promise((resolve, reject) => {
+
+  new Promise(resolve => {
     Promise.all([
-      createTableIfNeeded('getblockchaininfo', [
-        'chain VARCHAR(255) NULL DEFAULT NULL',
-        'blocks INT NULL DEFAULT NULL',
-        'bestblockhash VARCHAR(64) NULL DEFAULT NULL',
-        'difficulty FLOAT NULL DEFAULT NULL',
-        'verificationprogress FLOAT NULL DEFAULT NULL',
-        'chainwork VARCHAR(64) NULL DEFAULT NULL'
-      ]),
-      createTableIfNeeded('getwalletinfo', [
-        'walletversion INT NULL DEFAULT NULL',
-        'balance FLOAT NULL DEFAULT NULL',
-        'txcount INT NULL DEFAULT NULL',
-        'keypoololdest BIGINT NULL DEFAULT NULL',
-        'keypoolsize INT NULL DEFAULT NULL',
-        'unlocked_until INT NULL DEFAULT NULL'
+      createTableIfNeeded('getinfo', [
+        ['balance', 'FLOAT'],
+        ['txcount', 'INT'],
+        ['blocks', 'INT'],
+        ['moneysupply', 'FLOAT']
       ]),
       createTableIfNeeded('getstakinginfo', [
-        'enabled BOOL NOT NULL DEFAULT 0',
-        'staking BOOL NOT NULL DEFAULT 0',
-        'currentblocksize INT NULL DEFAULT NULL',
-        'currentblocktx INT NULL DEFAULT NULL',
-        'pooledtx INT NULL DEFAULT NULL',
-        'difficulty FLOAT NULL DEFAULT NULL',
-        'averageweight BIGINT NULL DEFAULT NULL',
-        'totalweight BIGINT NULL DEFAULT NULL',
-        'netstakeweight BIGINT NULL DEFAULT NULL',
-        'expectedtime BIGINT NULL DEFAULT NULL'
+        ['staking', 'BOOL', false, 0],
+        ['averageweight', 'BIGINT'],
+        ['totalweight', 'BIGINT'],
+        ['netstakeweight', 'BIGINT'],
+        ['expectedtime', 'BIGINT']
+      ]),
+      createTableIfNeeded('prices', [
+        ['currency', 'VARCHAR(32)'],
+        ['price', 'FLOAT'],
+        ['priceView', 'VARCHAR(64)']
       ])
     ]).then(InitResults => {
       if (!InitResults.includes(false)) {
