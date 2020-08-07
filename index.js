@@ -13,7 +13,7 @@ const checkForRPC = () => {
   return new Promise((resolve, reject) => {
     var data = JSON.stringify({ method: 'getinfo' })
 
-    var config = {
+    axios({
       method: 'post',
       url: RPC_URL,
       auth: {
@@ -23,11 +23,10 @@ const checkForRPC = () => {
       headers: {
         'Content-Type': 'application/json'
       },
-      data: data
-    }
-
-    axios(config)
-      .then(response => {
+      data: data,
+      timeout: 3000
+    })
+      .then(() => {
         resolve(true)
       })
       .catch((error) => {
@@ -201,9 +200,6 @@ const startLogger = () => {
         doPriceLogger()
       })
 
-      doLogger()
-      doPriceLogger()
-
       resolve()
     } catch (err) {
       reject(err)
@@ -217,57 +213,78 @@ const getCreateTableColumn = (Name, Type, Null = true, Default = 'DEFAULT NULL')
   return `\`${Name}\` ${Type} ${FinalNull} ${FinalDefault}`
 }
 
-Promise.all([
-  checkForRPC(),
-  checkForDB()
-]).then(() => {
-  newLine()
-  console.log('### REQUIREMENTS CHECK DONE ###')
-  console.log('RPC Server Check', ['[', process.env.RPC_HOSTNAME, ':', process.env.RPC_PORT, ']'].join(''), '... OK')
-  console.log('DB Server Check', ['[', process.env.MYSQL_HOSTNAME, ':', process.env.MYSQL_PORT, ']'].join(''), '... OK')
-
-  newLine()
-  console.log('### SETUP DATABASE')
-
-  new Promise(resolve => {
+const startProcess = () => {
+  return new Promise((resolve, reject) => {
     Promise.all([
-      createTableIfNeeded('getinfo', [
-        ['balance', 'FLOAT'],
-        ['txcount', 'INT'],
-        ['blocks', 'INT'],
-        ['moneysupply', 'FLOAT']
-      ]),
-      createTableIfNeeded('getstakinginfo', [
-        ['staking', 'BOOL', false, 0],
-        ['averageweight', 'BIGINT'],
-        ['totalweight', 'BIGINT'],
-        ['netstakeweight', 'BIGINT'],
-        ['expectedtime', 'BIGINT']
-      ]),
-      createTableIfNeeded('prices', [
-        ['currency', 'VARCHAR(32)'],
-        ['price', 'FLOAT'],
-        ['priceView', 'VARCHAR(64)']
-      ])
-    ]).then(InitResults => {
-      if (!InitResults.includes(false)) {
-        resolve(true)
-      }
-    })
-  }).then(dbInitResult => {
-    console.log('DB Setup', '...', dbInitResult === true ? 'DONE' : 'ERROR')
-
-    newLine()
-    console.log('### STARTING REDDCOIN-LOGGER ###')
-
-    startLogger().then(() => {
-      console.log('Logger has been started ...')
+      checkForRPC(),
+      checkForDB()
+    ]).then(() => {
       newLine()
+      console.log('### REQUIREMENTS CHECK DONE ###')
+      console.log('RPC Server Check', ['[', process.env.RPC_HOSTNAME, ':', process.env.RPC_PORT, ']'].join(''), '... OK')
+      console.log('DB Server Check', ['[', process.env.MYSQL_HOSTNAME, ':', process.env.MYSQL_PORT, ']'].join(''), '... OK')
+
+      clearInterval(LaunchIntervalID)
+
+      newLine()
+      console.log('### SETUP DATABASE')
+
+      new Promise(resolve => {
+        Promise.all([
+          createTableIfNeeded('getinfo', [
+            ['balance', 'FLOAT'],
+            ['txcount', 'INT'],
+            ['blocks', 'INT'],
+            ['moneysupply', 'FLOAT']
+          ]),
+          createTableIfNeeded('getstakinginfo', [
+            ['staking', 'BOOL', false, 0],
+            ['averageweight', 'BIGINT'],
+            ['totalweight', 'BIGINT'],
+            ['netstakeweight', 'BIGINT'],
+            ['expectedtime', 'BIGINT']
+          ]),
+          createTableIfNeeded('prices', [
+            ['currency', 'VARCHAR(32)'],
+            ['price', 'FLOAT'],
+            ['priceView', 'VARCHAR(64)']
+          ])
+        ]).then(InitResults => {
+          if (!InitResults.includes(false)) {
+            resolve(true)
+          }
+        })
+      }).then(dbInitResult => {
+        console.log('DB Setup', '...', dbInitResult === true ? 'DONE' : 'ERROR')
+
+        newLine()
+        console.log('### STARTING REDDCOIN-LOGGER ###')
+        startLogger().then(resolve).catch(reject)
+      }).catch(error => {
+        error.message && console.error(error.message)
+        throw new Error('Error while initializing database.')
+      })
+    }).catch(error => {
+      console.error('REDDCOIN-LOGGER LAUNCH', error)
+      console.log(`Retrying in ${ProcessRetryInterval / 1000} seconds ...`)
+      newLine()
+      reject(new Error())
     })
-  }).catch(error => {
-    error.message && console.error(error.message)
-    throw new Error('Error while initializing database.')
   })
-}).catch(error => {
-  console.error('REDDCOIN-LOGGER LAUNCH', error)
+}
+
+const showProcessStartMessage = () => {
+  console.log('Logger has been started ...')
+  newLine()
+}
+
+let LaunchIntervalID = false
+const ProcessRetryInterval = 5000
+startProcess().then(showProcessStartMessage).catch(() => {
+  LaunchIntervalID = setInterval(() => {
+    startProcess().then(() => {
+      showProcessStartMessage()
+      clearInterval(LaunchIntervalID)
+    }).catch(() => {})
+  }, ProcessRetryInterval)
 })
