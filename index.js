@@ -232,10 +232,10 @@ const startProcess = () => {
       new Promise(resolve => {
         Promise.all([
           createTableIfNeeded('getinfo', [
-            ['balance', 'FLOAT'],
+            ['balance', 'DOUBLE'],
             ['txcount', 'INT'],
             ['blocks', 'INT'],
-            ['moneysupply', 'FLOAT']
+            ['moneysupply', 'DOUBLE']
           ]),
           createTableIfNeeded('getstakinginfo', [
             ['staking', 'BOOL', false, 0],
@@ -246,7 +246,7 @@ const startProcess = () => {
           ]),
           createTableIfNeeded('prices', [
             ['currency', 'VARCHAR(32)'],
-            ['price', 'FLOAT'],
+            ['price', 'DOUBLE'],
             ['priceView', 'VARCHAR(64)']
           ])
         ]).then(InitResults => {
