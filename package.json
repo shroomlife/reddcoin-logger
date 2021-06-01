@@ -1,29 +1,34 @@
 {
   "name": "reddcoin-logger",
-  "version": "1.1.1",
-  "description": "a simple logger server to track your dockerized reddcoin wallet and store data in a mysql database",
-  "main": "index.js",
-  "license": "GPL-3.0-or-later",
+  "version": "1.1.2",
   "private": false,
+  "description": "a simple logger server to track your dockerized reddcoin wallet and store data in a mysql database",
+  "license": "GPL-3.0-or-later",
+  "main": "index.js",
   "scripts": {
-    "start": "node index",
+    "build": "docker build -t shroomlife/reddcoin-logger:latest . && docker push shroomlife/reddcoin-logger:latest",
     "dev": "nodemon index",
-    "build": "docker build -t shroomlife/reddcoin-logger:latest . && docker push shroomlife/reddcoin-logger:latest"
+    "start": "node index"
   },
-  "devDependencies": {
-    "eslint": "^7.6.0",
-    "eslint-config-standard": "^14.1.1",
-    "eslint-plugin-import": "^2.22.0",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^4.2.1",
-    "eslint-plugin-standard": "^4.0.1",
-    "nodemon": "^2.0.4"
+  "resolutions": {
+    "hosted-git-info": ">= 2.8.9",
+    "ini": ">= 1.3.6",
+    "lodash": ">= 4.17.21"
   },
   "dependencies": {
-    "axios": "^0.19.2",
-    "dotenv": "^8.2.0",
-    "moment": "^2.27.0",
-    "mysql": "^2.18.1",
-    "node-cron": "^2.0.3"
+    "axios": "0.21.1",
+    "dotenv": "8.2.0",
+    "moment": "2.29.1",
+    "mysql": "2.18.1",
+    "node-cron": "2.0.3"
+  },
+  "devDependencies": {
+    "eslint": "7.6.0",
+    "eslint-config-standard": "14.1.1",
+    "eslint-plugin-import": "2.22.0",
+    "eslint-plugin-node": "11.1.0",
+    "eslint-plugin-promise": "4.2.1",
+    "eslint-plugin-standard": "4.0.1",
+    "nodemon": "2.0.7"
   }
 }
